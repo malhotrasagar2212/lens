@@ -73,7 +73,7 @@ func resourceFromFile(f *ast.File) map[string]*ResourceSpec {
 			if !ok {
 				continue
 			}
-			switch identNew(kv.Key) {
+			switch identName(kv.Key) {
 			case "Schema":
 				if m, ok := kv.Value.(*ast.CompositeLit); ok {
 					rs.Schema = parseSchemaMap(m)
@@ -100,9 +100,7 @@ func parseSchemaMap(cl *ast.CompositeLit) map[string]*FieldSpec {
 		if name == "" || lit == nil {
 			continue
 		}
-		if fs, ok := kv.Value.(*ast.CompositeLit); ok {
-			out[name] = parseFieldSpec(fs)
-		}
+		out[name] = parseFieldSpec(name, lit)
 	}
 	return out
 }
@@ -188,7 +186,7 @@ func extractIDFormats(body *ast.BlockStmt) []string {
 	seen := map[string]bool{}
 	var out []string
 	ast.Inspect(body, func(n ast.Node) bool {
-		if s, ok := n.(*ast.AssignStmt); ok && s.Kind == token.STRING {
+		if s, ok := n.(*ast.BasicLit); ok && s.Kind == token.STRING {
 			v, err := strconv.Unquote(s.Value)
 			if err == nil && looksLikeIDFormat(v) && !seen[v] {
 				seen[v] = true
@@ -232,7 +230,7 @@ func identName(e ast.Expr) string {
 	case *ast.Ident:
 		return t.Name
 	case *ast.BasicLit:
-		if t.Kind == token.String {
+		if t.Kind == token.STRING {
 			s, _ := strconv.Unquote(t.Value)
 			return s
 		}

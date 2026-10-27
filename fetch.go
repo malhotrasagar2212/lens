@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,7 +11,7 @@ import (
 
 const mmRepo = "GoogleCloudPlatform/magic-modules"
 
-var compareRe = regexp.MustCompile(`github\.com/(modular-magician/terraform-provider-google(?:-beta)?)/compare/([0-9a-f]+\.\.\.([0-9a-f]+)`)
+var compareRe = regexp.MustCompile(`github\.com/(modular-magician/terraform-provider-google(?:-beta)?)/compare/([0-9a-f]+)\.\.\.?([0-9a-f]+)`)
 
 func ghGetJSON(token, url string, v interface{}) error {
 	req, _ := http.NewRequest("GET", url, nil)
@@ -35,16 +34,16 @@ func ghGetJSON(token, url string, v interface{}) error {
 
 // findCompareURL scans the PR's comments for the bot's compare link for the
 // chosen provider (google GA by default, google-beta if beta is true).
-func findCompareURL(token string, pr int, beta bool) (repo, base, head string, err error) {	
+func findCompareURL(token string, pr int, beta bool) (repo, base, head string, err error) {
 	type comment struct {
-		Body string `json:"body"`	
+		Body string `json:"body"`
 	}
 	var all []comment
 	for page := 1; ; page++ {
 		var batch []comment
 		u := fmt.Sprintf("https://api.github.com/repos/%s/issues/%d/comments?per_page=100&page=%d", mmRepo, pr, page)
 		if err = ghGetJSON(token, u, &batch); err != nil {
-			return 
+			return
 		}
 		if len(batch) == 0 {
 			break
@@ -52,13 +51,21 @@ func findCompareURL(token string, pr int, beta bool) (repo, base, head string, e
 		all = append(all, batch...)
 	}
 	for _, c := range all {
-		for _, m := range compareRe.FindStringSubmatch(c.Body, -1) {
-			r, b,h := m[1], m[2], m[3]
+		for _, m := range compareRe.FindAllStringSubmatch(c.Body, -1) {
+			r, b, h := m[1], m[2], m[3]
 			if strings.HasSuffix(r, "google-beta") == beta {
 				return r, b, h, nil
 			}
 		}
 	}
+	// fmt.Printf("DEBUG: fetched %d comments; ", len(all))
+	// ch := 0
+	// for _, c := range all {
+	// 	if strings.Contains(c.Body, "compare/") {
+	// 		ch++
+	// 	}
+	// }
+	// fmt.Printf("%d contain 'compare/'\n", ch)
 	return "", "", "", fmt.Errorf("no modular-magician compare link found on Pr #%d (beta=%v) -  is the Diff report posted yet?", pr, beta)
 }
 
@@ -81,26 +88,11 @@ func fetchFileAt(token, repo, path, ref string) (string, bool, error) {
 	if resp.StatusCode != 200 {
 		return "", false, fmt.Errorf("contents %s@%s: HTTP %d: %s", path, ref, resp.StatusCode, body)
 	}
-	var fc struct {
-		Content string `json:"content"`
-		Encoding string `json:"encoding"`
-	}
-
-	if err := json.Unmarshal(body, &fc); err != nil {
-		return "", false, err
-	}
-	if fc.Encoding != "base64" {
-		return "", false, fmt.Errorf("unexpected encoding %q for %s", fc.Encoding, path)
-	}
-	dec, err := base64.StdEncoding.DecodeString(fc.Content)
-	if err != nil {
-		return "", false, err
-	}
-	return string(dec), true, nil
+	return string(body), true, nil
 }
 
-func explainPR(token string, pr int, beta bool) ([]Change, int, []string, err error) {
-	repo,base,head, err := findCompareURL(token, pr, beta)
+func explainPR(token string, pr int, beta bool) ([]Change, int, []string, error) {
+	repo, base, head, err := findCompareURL(token, pr, beta)
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -119,6 +111,11 @@ func explainPR(token string, pr int, beta bool) ([]Change, int, []string, err er
 	churn := 0
 	resset := map[string]bool{}
 
+	fmt.Printf("DEBUG: comparing %d files\n", len(cmp.Files))
+	for _, f := range cmp.Files {
+		fmt.Printf(" ", f.Filename)
+	}
+
 	for _, f := range cmp.Files {
 		if !isGeneratedResourceFile(baseName(f.Filename)) {
 			continue
@@ -132,15 +129,15 @@ func explainPR(token string, pr int, beta bool) ([]Change, int, []string, err er
 			return nil, 0, nil, err
 		}
 
-		baseRes:= map[string]*ResourceSpec{}
+		baseRes := map[string]*ResourceSpec{}
 		if hadBase {
-			baseRes = parseResources(baseSrc)
+			baseRes = parseSource(baseSrc)
 		}
 		headRes := map[string]*ResourceSpec{}
 		if hadHead {
-			headRes = parseResources(headSrc)
+			headRes = parseSource(headSrc)
 		}
-		
+
 		for fn, hr := range headRes {
 			br := baseRes[fn]
 			if br == nil {
@@ -162,14 +159,14 @@ func explainPR(token string, pr int, beta bool) ([]Change, int, []string, err er
 }
 
 func baseName(p string) string {
-	if i := string.LastIndex(p, "/"); i>=0 {
+	if i := strings.LastIndex(p, "/"); i >= 0 {
 		return p[i+1:]
 	}
 	return p
 }
 
 func srcChurn(a, b string) int {
-	la, lb := strings.Split(a,"\n"), strings.Split(b,"\n")
+	la, lb := strings.Split(a, "\n"), strings.Split(b, "\n")
 	n := len(la)
 	if len(lb) > n {
 		n = len(lb)

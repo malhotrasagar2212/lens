@@ -32,7 +32,7 @@ type Change struct {
 
 func diffResources(base, head *ResourceSpec) []Change {
 	var ch []Change
-	ch = append(ch, diffSchema("", baseSchema, head.Schema)...)
+	ch = append(ch, diffSchema("", base.Schema, head.Schema)...)
 	if base.HasImporter && !head.HasImporter {
 		ch = append(ch, Change{"", Breaking, "import support was REMOVED"})
 	}
@@ -82,52 +82,52 @@ func addedFieldChange(p string, hf *FieldSpec) Change {
 	}
 }
 
-func diffField(p string, bf, hf *FieldSpec) []Change {
+func diffField(p string, b, h *FieldSpec) []Change {
 	var ch []Change
-	if !bf.ForceNew && hf.ForceNew {
+	if !b.ForceNew && h.ForceNew {
 		ch = append(ch, Change{p, Breaking, fmt.Sprintf("`%s` is now ForceNew -  changing it DESTROYS and recreates the resource", p)})
 	}
-	if bf.ForceNew && !hf.ForceNew {
+	if b.ForceNew && !h.ForceNew {
 		ch = append(ch, Change{p, Info, fmt.Sprintf("`%s`is no longer ForceNew", p)})
 	}
-	if bf.Required && !hf.Required {
+	if b.Required && !h.Required {
 		ch = append(ch, Change{p, Info, fmt.Sprintf("`%s` is now optional", p)})
 	}
-	if !bf.Required && hf.Required {
+	if !b.Required && h.Required {
 		ch = append(ch, Change{p, Breaking, fmt.Sprintf("`%s` is now required", p)})
 	}
-	if !bf.Computed && hf.Computed {
+	if !b.Computed && h.Computed {
 		ch = append(ch, Change{p, Warning, fmt.Sprintf("`%s` is now computed", p)})
 	}
-	if bf.Type != "" && hf.Type != "" && bf.Type != hf.Type {
-		ch = append(ch, Change{p, Breaking, fmt.Sprintf("`%s` type changed from `%s` to `%s`", p, bf.Type, hf.Type)})
+	if b.Type != "" && h.Type != "" && b.Type != h.Type {
+		ch = append(ch, Change{p, Breaking, fmt.Sprintf("`%s` type changed from `%s` to `%s`", p, b.Type, h.Type)})
 	}
-	if bf.Sensitive != hf.Sensitive {
-		if hf.Sensitive {
+	if b.Sensitive != h.Sensitive {
+		if h.Sensitive {
 			ch = append(ch, Change{p, Info, fmt.Sprintf("`%s` is now sensitive", p)})
 		} else {
 			ch = append(ch, Change{p, Warning, fmt.Sprintf("`%s` is no longer sensitive", p)})
 		}
 	}
-	if bf.MaxItems != hf.MaxItems {
+	if b.MaxItems != h.MaxItems {
 		sev := Info
-		if hf.MaxItems != 0 && (bf.MaxItems == 0 || hf.MaxItems < bf.MaxItems) {
+		if h.MaxItems != 0 && (b.MaxItems == 0 || h.MaxItems < b.MaxItems) {
 			sev = Warning
 		}
-		ch = append(ch, Change{p, sev, fmt.Sprintf("`%s` MaxItems changed from `%d` to `%d`", p, bf.MaxItems, hf.MaxItems)})
+		ch = append(ch, Change{p, sev, fmt.Sprintf("`%s` MaxItems changed from `%d` to `%d`", p, b.MaxItems, h.MaxItems)})
 	}
-	added, removed := diffStringSets(bf.EnumValues, hf.EnumValues)
+	added, removed := diffStringSets(b.EnumValues, h.EnumValues)
 	for _, v := range added {
 		ch = append(ch, Change{p, Info, fmt.Sprintf("`%s` accepts new value: `%s`", p, v)})
 	}
 	for _, v := range removed {
 		ch = append(ch, Change{p, Breaking, fmt.Sprintf("`%s` no longer accepts value: `%s` - configs using it break", p, v)})
 	}
-	if bf.HasDefault != hf.HasDefault || bf.Default != hf.Default {
-		ch = append(ch, Change{p, Warning, fmt.Sprintf("`%s` default changed from `%q` to `%q`", p, bf.Default, hf.Default)})
+	if b.HasDefault != h.HasDefault || b.Default != h.Default {
+		ch = append(ch, Change{p, Warning, fmt.Sprintf("`%s` default changed from `%q` to `%q`", p, b.Default, h.Default)})
 	}
-	if bf.nested != nil && hf.nested != nil {
-		ch = append(ch, diffSchema(p, mapOr(bf.Nested), mapOr(hf.Nested))...)
+	if b.Nested != nil && h.Nested != nil {
+		ch = append(ch, diffSchema(p, mapOr(b.Nested), mapOr(h.Nested))...)
 	}
 	return ch
 }
@@ -154,11 +154,11 @@ func mapOr(m map[string]*FieldSpec) map[string]*FieldSpec {
 }
 
 func diffStringSets(base, head []string) (added, removed []string) {
-	b := make(map[string]bool{})
+	b := map[string]bool{}
 	for _, v := range base {
 		b[v] = true
 	}
-	h := make(map[string]bool{})
+	h := map[string]bool{}
 	for _, v := range head {
 		h[v] = true
 	}
