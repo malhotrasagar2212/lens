@@ -64,7 +64,7 @@ func resourceFromFile(f *ast.File) map[string]*ResourceSpec {
 			}
 			return true
 		})
-		if resLit != nil {
+		if resLit == nil {
 			continue
 		}
 		rs := &ResourceSpec{Func: fn.Name.Name, Schema: map[string]*FieldSpec{}}
@@ -202,11 +202,11 @@ func looksLikeIDFormat(s string) bool {
 	if !strings.Contains(s, "/") {
 		return false
 	}
-	return strings.Contains(s, "{{}}") || strings.Contains(s, "%s") || strings.HasPrefix(s, "projects/")
+	return strings.Contains(s, "{{") || strings.Contains(s, "%s") || strings.HasPrefix(s, "projects/")
 }
 
 func isSelector(e ast.Expr, pkg, name string) bool {
-	if u, ok := e.(*ast.SelectorExpr); ok {
+	if u, ok := e.(*ast.UnaryExpr); ok {
 		e = u.X
 	}
 	sel, ok := e.(*ast.SelectorExpr)

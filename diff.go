@@ -76,7 +76,7 @@ func addedFieldChange(p string, hf *FieldSpec) Change {
 	case hf.Required:
 		return Change{p, Breaking, fmt.Sprintf("added REQUIRED field `%s` (%s) - existing configs without it will fail", p, typeName(hf))}
 	case hf.Computed && !hf.Optional:
-		return Change{p, Info, fmt.Sprintf("added output-onlyfield `%s` (%s)", p, typeName(hf))}
+		return Change{p, Info, fmt.Sprintf("added output-only field `%s` (%s)", p, typeName(hf))}
 	default:
 		return Change{p, Info, fmt.Sprintf("added optional field `%s` (%s)", p, typeName(hf))}
 	}
@@ -126,7 +126,7 @@ func diffField(p string, b, h *FieldSpec) []Change {
 	if b.HasDefault != h.HasDefault || b.Default != h.Default {
 		ch = append(ch, Change{p, Warning, fmt.Sprintf("`%s` default changed from `%q` to `%q`", p, b.Default, h.Default)})
 	}
-	if b.Nested != nil && h.Nested != nil {
+	if b.Nested != nil || h.Nested != nil {
 		ch = append(ch, diffSchema(p, mapOr(b.Nested), mapOr(h.Nested))...)
 	}
 	return ch

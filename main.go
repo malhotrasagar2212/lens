@@ -81,7 +81,7 @@ func main() {
 		if e2 != nil {
 			fatal(e2)
 		}
-		if bi.IsDir() || hi.IsDir() {
+		if bi.IsDir() && hi.IsDir() {
 			changes, churn, resources, err = diffDirs(pos[0], pos[1])
 		} else {
 			changes, churn, resources, err = diffFiles(pos[0], pos[1])
@@ -115,7 +115,7 @@ func main() {
 func printPRReport(r *PRResult) {
 	bar := strings.Repeat("=", 64)
 	fmt.Println(bar)
-	fmt.Printf(" lens - downstream blast radius")
+	fmt.Println(" lens - downstream blast radius")
 	fmt.Println(bar)
 	fmt.Printf("  repo    : %s\n", r.Repo)
 	fmt.Printf("  fan-out : %d magic-modules file(s) -> %d generated file(s)\n\n", r.SourceFiles, len(r.Files))
@@ -143,7 +143,7 @@ func printPRReport(r *PRResult) {
 			sort.Slice(svcs, func(i, j int) bool {
 				return bySvc[svcs[i]] > bySvc[svcs[j]]
 			})
-			fmt.Printf(".    %d files across: ", len(fs))
+			fmt.Printf("    %d files across: ", len(fs))
 			parts := []string{}
 			for _, s := range svcs {
 				parts = append(parts, fmt.Sprintf("%s(%d)", s, bySvc[s]))
@@ -162,27 +162,27 @@ func printPRReport(r *PRResult) {
 			}
 		}
 		fmt.Println()
-
-		var breaking, review, safe []Change
-		for _, c := range r.Changes {
-			switch c.Severity {
-			case Breaking:
-				breaking = append(breaking, c)
-			case Warning:
-				review = append(review, c)
-			default:
-				safe = append(safe, c)
-			}
-		}
-		fmt.Println(" BEHAVIORAL CHANGES (resource schemas)")
-		section("   [BREAKING]", breaking)
-		section("   [REVIEW]", review)
-		section("   [SAFE/ ADDITIVE]", safe)
-		if len(r.Changes) == 0 {
-			fmt.Println("   none in resource schemas")
+	}
+	var breaking, review, safe []Change
+	for _, c := range r.Changes {
+		switch c.Severity {
+		case Breaking:
+			breaking = append(breaking, c)
+		case Warning:
+			review = append(review, c)
+		default:
+			safe = append(safe, c)
 		}
 	}
+	fmt.Println(" BEHAVIORAL CHANGES (resource schemas)")
+	section("   [BREAKING]", breaking)
+	section("   [REVIEW]", review)
+	section("   [SAFE/ ADDITIVE]", safe)
+	if len(r.Changes) == 0 {
+		fmt.Println("   none in resource schemas")
+	}
 }
+
 func diffDirs(baseDir, headDir string) ([]Change, int, []string, error) {
 	var changes []Change
 	churn := 0
@@ -218,7 +218,7 @@ func diffDirs(baseDir, headDir string) ([]Change, int, []string, error) {
 		return nil, 0, nil, err
 	}
 	if err := walk(baseDir, func(rel string) {
-		if !headfiles[rel] {
+		if headfiles[rel] {
 			return
 		}
 		baseRes, e := parseGeneratedFile(filepath.Join(baseDir, rel))

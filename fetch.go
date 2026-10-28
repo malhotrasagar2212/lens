@@ -52,7 +52,7 @@ func buildPromt(source []srcFile, files []FileChange) string {
 	sb.WriteString(aiSystem)
 	sb.WriteString("\n\nSOURCE FILES CHANGED IN THE MAGIC-MODULES PR:\n")
 	for _, s := range source {
-		sb.WriteString(fmt.Sprintf("=== ", s.Filename, " ===\n"))
+		sb.WriteString(fmt.Sprintf("=== %s ===\n", s.Filename))
 		p := s.Patch
 		if len(p) > 2000 {
 			p = p[:2000] + "\n...[truncated]"
@@ -103,6 +103,8 @@ func categorize(path string) string {
 		return "test"
 	case strings.HasPrefix(b, "resource_"):
 		return "resource"
+	case strings.HasPrefix(b, "data_source_"):
+		return "data source"
 	case strings.HasPrefix(b, "list_"):
 		return "list resource"
 	case strings.HasPrefix(b, "action_"), strings.HasPrefix(b, "actions_"):
@@ -115,21 +117,6 @@ func categorize(path string) string {
 		return "other"
 	}
 }
-
-// func countPRResourceFiles(token string, pr int) int {
-// 	n := 0
-// 	for page := 1; ; page++ {
-// 		var batch []struct {
-// 			Filename string `json:"filename"`
-// 		}
-// 		u := fmt.Sprintf("https://api.github.com/repos/%s/pulls/%d/files?per_page=100&page=%d", mmRepo, pr, page)
-// 		if err := ghGetJSON(token, u, &batch); err != nil || len(batch) == 0 {
-// 			break
-// 		}
-// 		n += len(batch)
-// 	}
-// 	return n
-//}
 
 var compareRe = regexp.MustCompile(`github\.com/(modular-magician/terraform-provider-google(?:-beta)?)/compare/([0-9a-f]+)\.\.\.?([0-9a-f]+)`)
 
@@ -259,7 +246,7 @@ func explainPR(token string, pr int, beta bool) (*PRResult, error) {
 			for _, f := range cmpB.Files {
 				baseBlob[f.Filename] = f.SHA
 			}
-			for _, f := range cmpB.Files {
+			for _, f := range cmp.Files {
 				bsha, inBase := baseBlob[f.Filename]
 				if !inBase || bsha != f.SHA {
 					changed[f.Filename] = true
