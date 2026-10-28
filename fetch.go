@@ -206,7 +206,7 @@ func fetchFileAt(token, repo, path, ref string) (string, bool, error) {
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Accept", "application/vnd.github.raw")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", false, err
@@ -224,7 +224,6 @@ func fetchFileAt(token, repo, path, ref string) (string, bool, error) {
 
 func explainPR(token string, pr int, beta bool) (*PRResult, error) {
 	repo, base, head, err := findCompareURL(token, pr, beta)
-	fmt.Printf("DEBUG compare: %s..%s\n", base, head)
 	if err != nil {
 		return nil, err
 	}
@@ -255,7 +254,7 @@ func explainPR(token string, pr int, beta bool) (*PRResult, error) {
 			} `json:"files"`
 		}
 		bURL := fmt.Sprintf("https://api.github.com/repos/%s/compare/%s...%s", repo, mb, base)
-		if err := ghGetJSON(token, bURL, &cmpB); err != nil {
+		if err := ghGetJSON(token, bURL, &cmpB); err == nil {
 			baseBlob := map[string]string{}
 			for _, f := range cmpB.Files {
 				baseBlob[f.Filename] = f.SHA
