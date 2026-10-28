@@ -1,0 +1,13 @@
+# Built binary (lens)
+/lens
+
+# Go build/test artifacts
+*.exe
+*.o
+*.out
+*.test
+
+# Editor and IDE files
+.DS_Store
+.idea/
+.vscode/
