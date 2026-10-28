@@ -88,7 +88,7 @@ func diffField(p string, b, h *FieldSpec) []Change {
 		ch = append(ch, Change{p, Breaking, fmt.Sprintf("`%s` is now ForceNew -  changing it DESTROYS and recreates the resource", p)})
 	}
 	if b.ForceNew && !h.ForceNew {
-		ch = append(ch, Change{p, Info, fmt.Sprintf("`%s`is no longer ForceNew", p)})
+		ch = append(ch, Change{p, Info, fmt.Sprintf("`%s` is no longer ForceNew", p)})
 	}
 	if b.Required && !h.Required {
 		ch = append(ch, Change{p, Info, fmt.Sprintf("`%s` is now optional", p)})

@@ -39,7 +39,7 @@ type PRResult struct {
 	Files       []FileChange `json:"files"`
 	Changes     []Change     `json:"changes"`
 	Resources   []string     `json:"resources"`
-	SourceList  []srcFile    `json:"source_list"`
+	SourceList  []srcFile    `json:"-"`
 }
 
 type srcFile struct {
@@ -58,7 +58,7 @@ func buildPromt(source []srcFile, files []FileChange) string {
 			p = p[:2000] + "\n...[truncated]"
 		}
 		sb.WriteString(p + "\n\n")
-		if sb.Len() > 300000 {
+		if sb.Len() > 30000 {
 			sb.WriteString("...(more source files omitted)\n")
 			break
 		}
@@ -316,28 +316,6 @@ func baseName(p string) string {
 	return p
 }
 
-func srcChurn(a, b string) int {
-	la, lb := strings.Split(a, "\n"), strings.Split(b, "\n")
-	n := len(la)
-	if len(lb) > n {
-		n = len(lb)
-	}
-	d := 0
-	for i := 0; i < n; i++ {
-		var x, y string
-		if i < len(la) {
-			x = la[i]
-		}
-		if i < len(lb) {
-			y = lb[i]
-		}
-		if strings.TrimSpace(x) != strings.TrimSpace(y) {
-			d++
-		}
-	}
-	return d
-}
-
 func prHeadSHA(token string, pr int) string {
 	var d struct {
 		Head struct {
@@ -349,24 +327,4 @@ func prHeadSHA(token string, pr int) string {
 		return ""
 	}
 	return d.Head.SHA
-}
-
-func treeFiles(token, repo, sha string) map[string]string {
-	var t struct {
-		Tree []struct {
-			Path string `json:"path"`
-			Type string `json:"type"`
-			SHA  string `json:"sha"`
-		} `json:"tree"`
-	}
-
-	u := fmt.Sprintf("https://api.github.com/repos/%s/git/trees/%s?recursive=1", repo, sha)
-	if err := ghGetJSON(token, u, &t); err != nil {
-		return nil
-	}
-	m := map[string]string{}
-	for _, e := range t.Tree {
-		m[e.Path] = e.SHA
-	}
-	return m
 }
