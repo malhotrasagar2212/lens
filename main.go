@@ -12,13 +12,15 @@ import (
 
 func main() {
 	var pos []string
-	jsonOut, beta := false, false
+	jsonOut, beta, ai := false, false, false
 	for _, a := range os.Args[1:] {
 		switch a {
 		case "--json":
 			jsonOut = true
 		case "--beta":
 			beta = true
+		case "--ai":
+			ai = true
 		default:
 			pos = append(pos, a)
 		}
@@ -43,8 +45,33 @@ func main() {
 			fmt.Fprintln(os.Stderr, "lens: set GITHUB_TOKEN (repo read scope)")
 			os.Exit(1)
 		}
-		changes, churn, resources, err = explainPR(token, prNum, beta)
+		res, err := explainPR(token, prNum, beta)
+		if err != nil {
+			fatal(err)
+		}
 
+		if jsonOut {
+			b, _ := json.MarshalIndent(res, "", "  ")
+			fmt.Println(string(b))
+		} else {
+			printPRReport(res)
+		}
+		if ai {
+			if txt, err := copilotExplain(buildPromt(res.SourceList, res.Files)); err != nil {
+				fmt.Fprintln(os.Stderr, "lens:", err)
+			} else {
+				fmt.Println("\n WHY THESE CHANGED")
+				for _, line := range strings.Split(txt, "\n") {
+					fmt.Println("  ", line)
+				}
+			}
+		}
+		for _, c := range res.Changes {
+			if c.Severity == Breaking {
+				os.Exit(1)
+			}
+		}
+		return
 	case len(pos) == 2:
 		bi, e1 := os.Stat(pos[0])
 		hi, e2 := os.Stat(pos[1])
@@ -85,6 +112,77 @@ func main() {
 	}
 }
 
+func printPRReport(r *PRResult) {
+	bar := strings.Repeat("=", 64)
+	fmt.Println(bar)
+	fmt.Printf(" lens - downstream blast radius")
+	fmt.Println(bar)
+	fmt.Printf("  repo    : %s\n", r.Repo)
+	fmt.Printf("  fan-out : %d magic-modules file(s) -> %d generated file(s)\n\n", r.SourceFiles, len(r.Files))
+	order := []string{"resource", "data source", "list resource", "action", "registration", "test", "docs", "meta", "other"}
+	byCat := map[string][]FileChange{}
+	for _, f := range r.Files {
+		byCat[f.Category] = append(byCat[f.Category], f)
+	}
+	fmt.Println(" CHANGED FILES")
+	for _, cat := range order {
+		fs := byCat[cat]
+		if len(fs) == 0 {
+			continue
+		}
+		fmt.Printf("  [%s]:\n", cat)
+		if len(fs) > 12 {
+			bySvc := map[string]int{}
+			for _, f := range fs {
+				bySvc[serviceOf(f.Filename)]++
+			}
+			svcs := make([]string, 0, len(bySvc))
+			for s := range bySvc {
+				svcs = append(svcs, s)
+			}
+			sort.Slice(svcs, func(i, j int) bool {
+				return bySvc[svcs[i]] > bySvc[svcs[j]]
+			})
+			fmt.Printf(".    %d files across: ", len(fs))
+			parts := []string{}
+			for _, s := range svcs {
+				parts = append(parts, fmt.Sprintf("%s(%d)", s, bySvc[s]))
+			}
+			fmt.Println(strings.Join(parts, ", "))
+		} else {
+			for _, f := range fs {
+				mark := "~"
+				switch f.Status {
+				case "added":
+					mark = "+"
+				case "removed":
+					mark = "-"
+				}
+				fmt.Printf("    %s %-52s +%d/-%d\n", mark, f.Filename, f.Additions, f.Deletions)
+			}
+		}
+		fmt.Println()
+
+		var breaking, review, safe []Change
+		for _, c := range r.Changes {
+			switch c.Severity {
+			case Breaking:
+				breaking = append(breaking, c)
+			case Warning:
+				review = append(review, c)
+			default:
+				safe = append(safe, c)
+			}
+		}
+		fmt.Println(" BEHAVIORAL CHANGES (resource schemas)")
+		section("   [BREAKING]", breaking)
+		section("   [REVIEW]", review)
+		section("   [SAFE/ ADDITIVE]", safe)
+		if len(r.Changes) == 0 {
+			fmt.Println("   none in resource schemas")
+		}
+	}
+}
 func diffDirs(baseDir, headDir string) ([]Change, int, []string, error) {
 	var changes []Change
 	churn := 0
@@ -312,4 +410,17 @@ func keys(m map[string]bool) []string {
 func fatal(err error) {
 	fmt.Fprintln(os.Stderr, err)
 	os.Exit(2)
+}
+
+func serviceOf(path string) string {
+	parts := strings.Split(path, "/")
+	for i, p := range parts {
+		if p == "services" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	if len(parts) > 1 {
+		return parts[0] + "/" + parts[1]
+	}
+	return parts[0]
 }
